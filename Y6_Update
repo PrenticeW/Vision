@@ -153,6 +153,12 @@ function onEdit(e) {
       return;
     }
 
+    // Run column 5 logic only when a single cell in column 5 is edited
+    if (numRows === 1 && numColumns === 1 && startColumn === COLUMN_5) {
+      updateDropdownBasedOnColumn5(sheet, startRow);
+      return;
+    }
+
     // Iterate over each edited cell
     for (var i = 0; i < numRows; i++) {
       var currentRow = startRow + i;
@@ -167,11 +173,6 @@ function onEdit(e) {
         // Check if the edited cell is in column > 7
         if (currentColumn > 7) {
           updateDropdownBasedOnValues(sheet, currentRow);
-        }
-
-        // Check if the edited cell is in column 5
-        if (currentColumn === COLUMN_5) {
-          updateDropdownBasedOnColumn5(sheet, currentRow);
         }
       }
     }
@@ -240,7 +241,7 @@ function updateDropdownBasedOnValues(sheet, row) {
 }
 function updateDropdownBasedOnColumn5(sheet, row) {
   // List of statuses to exit the function
-  var excludedStatuses = ["Abandoned", "Blocked", "On Hold", "Skipped", "In Progress"];
+  var excludedStatuses = ["Abandoned", "Blocked", "On Hold", "Skipped", "In Progress", "Done"];
 
   // Get the value of the cell in column 5
   var column5Value = sheet.getRange(row, 5).getValue()?.toString().trim(); // Ensure we are explicitly checking column 5
