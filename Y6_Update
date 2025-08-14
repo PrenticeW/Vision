@@ -4,7 +4,7 @@
 */
 
 // Define constants for specific rows and columns
-const HEADER_END_ROW = 12;
+const HEADER_END_ROW = 9;
 const TEMPLATE_ROW = 1;
 const START_COPY_ROW = 9;
 const DROPDOWN_COLUMN = 4;
@@ -92,7 +92,7 @@ function onPaste(event) {
 
   // Constants
   const TEMPLATE_ROW = 1; // Row used as the template for formatting
-  const HEADER_END_ROW = 12; // End of the header rows
+  const HEADER_END_ROW = 9; // End of the header rows
   const START_COLUMN_PASTE_CHECK = 8; // Minimum column to trigger formatting
 
   // List of sheet names to which this function should apply
@@ -108,7 +108,7 @@ function onPaste(event) {
   var numRows = event.range.getNumRows();
   var numColumns = event.range.getNumColumns();
 
-  // Exit if the paste action happens in rows 1-12 or starts before column 8
+  // Exit if the paste action happens in rows 1-9 or starts before column 8
   if (startRow <= HEADER_END_ROW || startColumn < START_COLUMN_PASTE_CHECK) {
     return;
   }
@@ -148,7 +148,7 @@ function onEdit(e) {
     var startColumn = range.getColumn();
     var numColumns = range.getNumColumns();
 
-    // Exit if the action is in a header or if more than 4 rows are being edited
+    // Exit if the action is in the header (rows 1-9) or if more than 4 rows are being edited
     if (startRow <= HEADER_END_ROW || numRows > MAX_ROWS_TO_PASTE) {
       return;
     }
