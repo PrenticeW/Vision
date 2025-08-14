@@ -482,7 +482,7 @@ function deleteRowsDoneOrAbandoned() {
     // Check if the value in column D is "Done" or "Abandoned"
     if (dropdownValue === "Done" || dropdownValue === "Abandoned") {
       if (isRecurring === true) {
-        var clearStartColumn = START_COLUMN_PASTE_CHECK; // Column I
+        var clearStartColumn = START_COLUMN_PASTE_CHECK - 1; // Column H
         var numColumnsToClear = sheet.getLastColumn() - clearStartColumn + 1;
         sheet.getRange(row, clearStartColumn, 1, numColumnsToClear).clearContent();
         sheet.getRange(row, DROPDOWN_COLUMN).setValue('Not Scheduled');
@@ -579,5 +579,3 @@ function ungroupSelectedRows() {
   // Batch update request to Sheets API
   Sheets.Spreadsheets.batchUpdate(request, SpreadsheetApp.getActiveSpreadsheet().getId());
 }
-
-
