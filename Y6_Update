@@ -542,3 +542,36 @@ function ungroupSelectedRows() {
   // Batch update request to Sheets API
   Sheets.Spreadsheets.batchUpdate(request, SpreadsheetApp.getActiveSpreadsheet().getId());
 }
+
+function ProjectHours(headerCell) {
+  const COLOR = "#d5a6bd";
+  const sheet = headerCell.getSheet();
+  const row   = headerCell.getRow();
+  const col   = headerCell.getColumn();
+
+  // Return 0 if the row isn’t a project header.
+  if (headerCell.getBackground().toLowerCase() !== COLOR) return 0;
+
+  // Find the next row that has the header color.
+  const last = sheet.getLastRow();
+  const bg   = sheet.getRange(row + 1, col, last - row).getBackgrounds();
+  let endRow = last + 1;
+  for (let i = 0; i < bg.length; i++) {
+    if (bg[i][0].toLowerCase() === COLOR) {
+      endRow = row + 1 + i;
+      break;
+    }
+  }
+
+  // Sum hours where status is “scheduled” or “done”.
+  const statuses = sheet.getRange(row + 1, 6, endRow - row - 1, 1).getValues(); // col F
+  const hours    = sheet.getRange(row + 1, 8, endRow - row - 1, 1).getValues(); // col H
+  let total = 0;
+  for (let i = 0; i < hours.length; i++) {
+    const s = String(statuses[i][0]).toLowerCase();
+    if (s === "scheduled" || s === "done") {
+      total += Number(hours[i][0]) || 0;
+    }
+  }
+  return total;
+}
