@@ -30,10 +30,8 @@ function onOpen() {
   // Create custom menu in Google Sheets with submenus
   ui.createMenu('Vision')
     .addSubMenu(ui.createMenu('➕ Insert')
-      .addItem('Insert New Task', 'insertTask')
-      .addItem('Insert 5 New Tasks', 'insertFiveTasks')
-      .addItem('Insert 10 New Tasks', 'insertTenTasks')
-      
+      .addItem('Insert Tasks', 'insertTasks')
+
       .addSeparator()
       .addItem('Collect Times', 'captureSelectedRange')
       .addItem('Insert Time Total', 'addTotalFunction')
@@ -285,62 +283,27 @@ function updateDropdownBasedOnColumn5(sheet, row) {
 // Insert
 // ------------------------------------
 
-function insertTask() {
-  var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
-  var range = sheet.getActiveRange();
-  var row = range.getRow();
-  
-  // Insert a new row below the selected row
-  sheet.insertRowAfter(row);
-
-  // Get the range of the template row
-  var templateRange = sheet.getRange(TEMPLATE_ROW, 1, 1, sheet.getLastColumn());
-
-  // Get the range of the new row
-  var newRowRange = sheet.getRange(row + 1, 1, 1, sheet.getLastColumn());
-
-  // Copy values and formulas from the template row to the new row
-  templateRange.copyTo(newRowRange, { contentsOnly: false });
-}
-
-function insertFiveTasks() {
-  var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
-  var range = sheet.getActiveRange();
-  var row = range.getRow();
-  
-  // Get the range of the template row
-  var templateRange = sheet.getRange(TEMPLATE_ROW, 1, 1, sheet.getLastColumn());
-
-  // Loop to insert 5 new rows below the selected row and copy the template values and formulas
-  for (var i = 0; i < 5; i++) {
-    sheet.insertRowAfter(row + i);
-
-    // Get the range of the new row
-    var newRowRange = sheet.getRange(row + i + 1, 1, 1, sheet.getLastColumn());
-
-    // Copy values and formulas from the template row to the new row
-    templateRange.copyTo(newRowRange, { contentsOnly: false });
+function insertTasks() {
+  const ui = SpreadsheetApp.getUi();
+  const response = ui.prompt('Insert Tasks', 'Enter number of tasks to insert:', ui.ButtonSet.OK_CANCEL);
+  if (response.getSelectedButton() !== ui.Button.OK) {
+    return;
   }
-}
 
-function insertTenTasks() {
-  var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
-  var range = sheet.getActiveRange();
-  var row = range.getRow();
-  
-  // Get the range of the template row
-  var templateRange = sheet.getRange(TEMPLATE_ROW, 1, 1, sheet.getLastColumn());
-
-  // Loop to insert 10 new rows below the selected row and copy the template values and formulas
-  for (var i = 0; i < 10; i++) {
-    sheet.insertRowAfter(row + i);
-
-    // Get the range of the new row
-    var newRowRange = sheet.getRange(row + i + 1, 1, 1, sheet.getLastColumn());
-
-    // Copy values and formulas from the template row to the new row
-    templateRange.copyTo(newRowRange, { contentsOnly: false });
+  const num = parseInt(response.getResponseText(), 10);
+  if (isNaN(num) || num <= 0) {
+    ui.alert('Please enter a valid positive number.');
+    return;
   }
+
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  const range = sheet.getActiveRange();
+  const row = range.getRow();
+  const templateRange = sheet.getRange(TEMPLATE_ROW, 1, 1, sheet.getLastColumn());
+
+  sheet.insertRowsAfter(row, num);
+  const newRowsRange = sheet.getRange(row + 1, 1, num, sheet.getLastColumn());
+  templateRange.copyTo(newRowsRange, { contentsOnly: false });
 }
 
 function insertNewProject() {
