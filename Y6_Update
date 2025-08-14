@@ -10,18 +10,19 @@ const START_COPY_ROW = 9;
 const DROPDOWN_COLUMN = 4;
 const CHECKBOX_COLUMN = 1;
 const COLUMN_5 = 5;
+const RECURRING_COLUMN = 6; // Column F for recurring checkbox
 const PROJECTS_SHEET = 'Year 5: Projects';
 const STAGING_SHEET = 'Year 5: Staging';
 const DROPDOWN_TARGET_COLUMN = 2; // Added for column 2 reference
 const DROPDOWN_SOURCE_START_ROW = 265; // Added for row 289 reference
 const DROPDOWN_SOURCE_COLUMN_START = 1; // Added for column 1 reference in dropdown
 const DROPDOWN_SOURCE_COLUMN_END = 2; // Added for column 2 reference in dropdown
-const START_COLUMN_PASTE_CHECK = 8; // Added for column 8 reference
+const START_COLUMN_PASTE_CHECK = 9; // Added for column 9 reference
 const TEMPLATE_ROWS = [2, 3, 4]; // Added for template rows in insertNewProject function
 const NUM_CELLS_TO_COLOR = 7; // Added for number of cells to color in addArchiveHeader function
 const NUM_COLUMNS_HIDE = 7; // Added for number of columns to hide/unhide in hideSelectedWeek and unhidePreviousWeek functions
 const MAX_ROWS_TO_PASTE = 4; // Added so onEdit doesnt run when pasting into Archive
-const COLUMN_OFFSET = 7; //Used in "update based on column 5" 
+const COLUMN_OFFSET = 8; //Used in "update based on column 5"
 
 function onOpen() {
   const ui = SpreadsheetApp.getUi(); // Get the user interface for the spreadsheet
@@ -93,7 +94,7 @@ function onPaste(event) {
   // Constants
   const TEMPLATE_ROW = 1; // Row used as the template for formatting
   const HEADER_END_ROW = 9; // End of the header rows
-  const START_COLUMN_PASTE_CHECK = 8; // Minimum column to trigger formatting
+  const START_COLUMN_PASTE_CHECK = 9; // Minimum column to trigger formatting
 
   // List of sheet names to which this function should apply
   var allowedSheets = [PROJECTS_SHEET]; // Add your sheet names here
@@ -108,7 +109,7 @@ function onPaste(event) {
   var numRows = event.range.getNumRows();
   var numColumns = event.range.getNumColumns();
 
-  // Exit if the paste action happens in rows 1-9 or starts before column 8
+  // Exit if the paste action happens in rows 1-9 or starts before column 9
   if (startRow <= HEADER_END_ROW || startColumn < START_COLUMN_PASTE_CHECK) {
     return;
   }
@@ -170,8 +171,8 @@ function onEdit(e) {
           updateCheckboxBasedOnDropdown(sheet, currentRow);
         }
 
-        // Check if the edited cell is in column > 7
-        if (currentColumn > 7) {
+        // Check if the edited cell is in column >= START_COLUMN_PASTE_CHECK
+        if (currentColumn >= START_COLUMN_PASTE_CHECK) {
           updateDropdownBasedOnValues(sheet, currentRow);
         }
       }
@@ -213,10 +214,10 @@ function updateDropdownBasedOnValues(sheet, row) {
     return; // Exit if there is no dropdown in the cell
   }
 
-  // Get the range of the row specified beyond column 7
-  var rowRange = sheet.getRange(row, START_COLUMN_PASTE_CHECK, 1, sheet.getLastColumn() - 7); // Columns beyond column 7
+  // Get the range of the row specified beyond column 8
+  var rowRange = sheet.getRange(row, START_COLUMN_PASTE_CHECK, 1, sheet.getLastColumn() - START_COLUMN_PASTE_CHECK + 1); // Columns beyond column 8
 
-  // Get the values in the specified row beyond column 7
+  // Get the values in the specified row beyond column 8
   var values = rowRange.getValues()[0];
 
   // Check if there is any value greater than 0 in the specified range
@@ -446,9 +447,9 @@ function deleteRows() {
     var row = range.getRow() + i; // Get the actual row number (1-indexed)
     var dropdownValue = sheet.getRange(row, DROPDOWN_COLUMN).getValue(); // Get value from the dropdown in DROPDOWN_COLUMN
 
-    // If the dropdown value is "Skipped" or "Abandoned", update column 6 to "-"
+    // If the dropdown value is "Skipped" or "Abandoned", update column 7 to "-"
     if (dropdownValue === "Skipped" || dropdownValue === "Abandoned") {
-      sheet.getRange(row, 6).setValue("-"); // Set column 6 to "-"
+      sheet.getRange(row, 7).setValue("-"); // Set column 7 to "-"
     }
 
     // Check if the value in DROPDOWN_COLUMN is one of the specified values to delete
@@ -476,10 +477,19 @@ function deleteRowsDoneOrAbandoned() {
   for (var i = 0; i < data.length; i++) {
     var row = range.getRow() + i; // Get the actual row number (1-indexed)
     var dropdownValue = sheet.getRange(row, DROPDOWN_COLUMN).getValue(); // Column D is index 4 (4th column)
+    var isRecurring = sheet.getRange(row, RECURRING_COLUMN).getValue();
 
     // Check if the value in column D is "Done" or "Abandoned"
     if (dropdownValue === "Done" || dropdownValue === "Abandoned") {
-      rowsToDelete.push(row); // Add the row number to the delete list
+      if (isRecurring === true) {
+        var clearStartColumn = START_COLUMN_PASTE_CHECK; // Column I
+        var numColumnsToClear = sheet.getLastColumn() - clearStartColumn + 1;
+        sheet.getRange(row, clearStartColumn, 1, numColumnsToClear).clearContent();
+        sheet.getRange(row, DROPDOWN_COLUMN).setValue('Not Scheduled');
+        sheet.getRange(row, CHECKBOX_COLUMN).setValue(false);
+      } else {
+        rowsToDelete.push(row); // Add the row number to the delete list
+      }
     }
   }
 
@@ -488,7 +498,7 @@ function deleteRowsDoneOrAbandoned() {
     sheet.deleteRow(rowsToDelete[j]);
   }
 
-  SpreadsheetApp.getUi().alert('Rows have been deleted.');
+  SpreadsheetApp.getUi().alert('Rows have been deleted or cleared.');
 }
 
 // ------------------------------------
