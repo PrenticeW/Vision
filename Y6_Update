@@ -519,27 +519,11 @@ Sheets.Spreadsheets.batchUpdate(request, SpreadsheetApp.getActiveSpreadsheet().g
 /**
  * Calculate total hours for tasks under a colored project header.
  * Place in the header row's column G cell and call as:
- *   =projectHours(ROW(), COLUMN())
- * or simply:
- *   =projectHours()
+ * =projectHours(ROW(), COLUMN())
  */
-function projectHours(row, col) {
+function ProjectHours(row, col) {
   const COLOR = "#d5a6bd";
   const sheet = SpreadsheetApp.getActiveSheet();
-
-  // If row and column are not provided, use the cell containing the formula.
-  if (row === undefined || col === undefined) {
-    const active = sheet.getActiveCell();
-    row = active.getRow();
-    col = active.getColumn();
-  } else {
-    row = Number(row);
-    col = Number(col);
-    if (!Number.isFinite(row) || !Number.isFinite(col)) {
-      throw new Error('Row and column must be numbers');
-    }
-  }
-
   const headerCell = sheet.getRange(row, col);
 
   // Return 0 if the row isn’t a project header.
@@ -595,4 +579,3 @@ function ungroupSelectedRows() {
   // Batch update request to Sheets API
   Sheets.Spreadsheets.batchUpdate(request, SpreadsheetApp.getActiveSpreadsheet().getId());
 }
-
