@@ -651,21 +651,19 @@ function colorSelectedTotalsWoW() {
     return;
   }
 
-  const selection = SpreadsheetApp.getActive().getSelection();
-  const rangeList = selection.getActiveRangeList();
-  if (!rangeList) { ui.alert('Select one or more cells in column G.'); return; }
+  const sel = sheet.getActiveRange();
+  if (!sel) { ui.alert('Select one or more cells in column G.'); return; }
 
-  // Gather only column-G rows from all selected ranges
+  // Gather only column-G rows from the selection
   const rows = new Set();
-  rangeList.getRanges().forEach((rng) => {
-    const r0 = rng.getRow(), c0 = rng.getColumn();
-    const nr = rng.getNumRows(), nc = rng.getNumColumns();
-    for (let dr = 0; dr < nr; dr++) {
-      for (let dc = 0; dc < nc; dc++) {
-        if (c0 + dc === 7) rows.add(r0 + dr); // only G
-      }
+  const r0 = sel.getRow(), c0 = sel.getColumn();
+  const nr = sel.getNumRows(), nc = sel.getNumColumns();
+  for (let dr = 0; dr < nr; dr++) {
+    for (let dc = 0; dc < nc; dc++) {
+      const col = c0 + dc;
+      if (col === 7) rows.add(r0 + dr); // only G
     }
-  });
+  }
   if (rows.size === 0) { ui.alert('Please select cells in column G.'); return; }
 
   let colored = 0, skipped = 0;
@@ -706,21 +704,19 @@ function compareWeeks() {
     return;
   }
 
-  const selection = SpreadsheetApp.getActive().getSelection();
-  const rangeList = selection.getActiveRangeList();
-  if (!rangeList) { ui.alert('Select one or more cells in column G.'); return; }
+  const sel = sheet.getActiveRange();
+  if (!sel) { ui.alert('Select one or more cells in column G.'); return; }
 
-  // Gather only column-G rows from all selected ranges
+  // Gather only column-G rows from the selection
   const rows = new Set();
-  rangeList.getRanges().forEach((rng) => {
-    const r0 = rng.getRow(), c0 = rng.getColumn();
-    const nr = rng.getNumRows(), nc = rng.getNumColumns();
-    for (let dr = 0; dr < nr; dr++) {
-      for (let dc = 0; dc < nc; dc++) {
-        if (c0 + dc === 7) rows.add(r0 + dr); // only G
-      }
+  const r0 = sel.getRow(), c0 = sel.getColumn();
+  const nr = sel.getNumRows(), nc = sel.getNumColumns();
+  for (let dr = 0; dr < nr; dr++) {
+    for (let dc = 0; dc < nc; dc++) {
+      const col = c0 + dc;
+      if (col === 7) rows.add(r0 + dr); // only G
     }
-  });
+  }
   if (rows.size === 0) { ui.alert('Please select cells in column G.'); return; }
 
   const anchor = WOW_getArchiveAnchorRow_(sheet);
@@ -755,18 +751,15 @@ function compareWeeks() {
 
 /** MENU ACTION: Clear font color on selected G cells */
 function clearSelectedFontColor() {
-  const ss = SpreadsheetApp.getActive();
-  const sheet = ss.getActiveSheet();
-  const rangeList = ss.getSelection().getActiveRangeList();
-  if (!rangeList) return;
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  const sel = sheet.getActiveRange();
+  if (!sel) return;
 
-  rangeList.getRanges().forEach((rng) => {
-    const r0 = rng.getRow(), c0 = rng.getColumn();
-    const nr = rng.getNumRows(), nc = rng.getNumColumns();
-    for (let dr = 0; dr < nr; dr++) {
-      for (let dc = 0; dc < nc; dc++) {
-        if (c0 + dc === 7) sheet.getRange(r0 + dr, 7).setFontColor(null);
-      }
+  const r0 = sel.getRow(), c0 = sel.getColumn();
+  const nr = sel.getNumRows(), nc = sel.getNumColumns();
+  for (let dr = 0; dr < nr; dr++) {
+    for (let dc = 0; dc < nc; dc++) {
+      if (c0 + dc === 7) sheet.getRange(r0 + dr, 7).setFontColor(null);
     }
-  });
+  }
 }
