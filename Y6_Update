@@ -22,6 +22,7 @@ const MAX_ROWS_TO_PASTE = 4; // Added so onEdit doesnt run when pasting into Arc
 const COLUMN_OFFSET = 8; // Used in "update based on column 5"
 const STATUS_COLUMN = DROPDOWN_COLUMN; // Column D for task status
 const HOURS_COLUMN = 8; // Column H for hours entry
+const PROJECT_HOURS_AT_COLUMN = 9; // Column I for ProjectHoursAt timestamp
 const HEADER_COLOR_COLUMN = 1; // Column A used to identify project headers
 const HEADER_COLOR = '#d5a6bd'; // Background color for project headers
 const CACHE_EXPIRATION = 3600; // Cache lifetime in seconds
@@ -163,6 +164,7 @@ function onEdit(e) {
     var startColumn = range.getColumn();
     var numColumns = range.getNumColumns();
     var rowsToUpdate = new Set();
+    var timestampRows = new Set();
 
     // Exit if the action is in the header (rows 1-9) or if more than 4 rows are being edited
     if (startRow <= HEADER_END_ROW || numRows > MAX_ROWS_TO_PASTE) {
@@ -195,13 +197,30 @@ function onEdit(e) {
         if (currentColumn === STATUS_COLUMN || currentColumn === HOURS_COLUMN) {
           rowsToUpdate.add(currentRow);
         }
+
+        // Track rows requiring ProjectHoursAt update
+        if (currentColumn === STATUS_COLUMN || currentColumn === 7 || currentColumn === HOURS_COLUMN) {
+          timestampRows.add(currentRow);
+        }
       }
     }
 
     rowsToUpdate.forEach(function (r) {
       updateProjectTotal(sheet, r);
     });
+
+    timestampRows.forEach(function (r) {
+      sheet.getRange(r, PROJECT_HOURS_AT_COLUMN).setValue(new Date());
+    });
   }
+}
+
+function onChange(e) {
+  if (e.changeType !== 'OTHER') return;
+  var sheet = SpreadsheetApp.getActive().getSheetByName(PROJECTS_SHEET);
+  if (!sheet) return;
+  var row = sheet.getActiveCell().getRow();
+  sheet.getRange(row, PROJECT_HOURS_AT_COLUMN).setValue(new Date());
 }
 
 function updateCheckboxBasedOnDropdown(sheet, row) {
