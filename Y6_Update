@@ -153,55 +153,47 @@ function onPaste(event) {
 }
 
 function onEdit(e) {
-  var sheet = e.source.getActiveSheet();
-  var range = e.range;
-  var sheetName = sheet.getName();
+  const sheet = e.source.getActiveSheet();
+  if (sheet.getName() !== PROJECTS_SHEET) return;
 
-  if (sheetName == PROJECTS_SHEET) {
-    var startRow = range.getRow();
-    var numRows = range.getNumRows();
-    var startColumn = range.getColumn();
-    var numColumns = range.getNumColumns();
-    var rowsToUpdate = new Set();
+  const range = e.range;
+  const startRow = range.getRow();
+  const numRows = range.getNumRows();
+  const startColumn = range.getColumn();
+  const numColumns = range.getNumColumns();
+  const rowsToUpdate = new Set();
 
-    // Exit if the action is in the header (rows 1-9) or if more than 4 rows are being edited
-    if (startRow <= HEADER_END_ROW || numRows > MAX_ROWS_TO_PASTE) {
-      return;
-    }
+  // Exit if the action is in the header (rows 1-9) or if too many rows are edited
+  if (startRow <= HEADER_END_ROW || numRows > MAX_ROWS_TO_PASTE) return;
 
-    // Run column 5 logic only when a single cell in column 5 is edited
-    if (numRows === 1 && numColumns === 1 && startColumn === COLUMN_5) {
-      updateDropdownBasedOnColumn5(sheet, startRow);
-      return;
-    }
+  // Run column 5 logic only when a single cell in column 5 is edited
+  if (numRows === 1 && numColumns === 1 && startColumn === COLUMN_5) {
+    updateDropdownBasedOnColumn5(sheet, startRow);
+    return;
+  }
 
-    // Iterate over each edited cell
-    for (var i = 0; i < numRows; i++) {
-      var currentRow = startRow + i;
-      for (var j = 0; j < numColumns; j++) {
-        var currentColumn = startColumn + j;
+  // Iterate over each edited cell
+  for (let i = 0; i < numRows; i++) {
+    const currentRow = startRow + i;
+    for (let j = 0; j < numColumns; j++) {
+      const currentColumn = startColumn + j;
 
-        // Check if the edited cell is in column 4 or column 1
-        if (currentColumn === DROPDOWN_COLUMN || currentColumn === CHECKBOX_COLUMN) {
-          updateCheckboxBasedOnDropdown(sheet, currentRow);
-        }
+      // Maintain existing dropdown/checkbox logic
+      if (currentColumn === DROPDOWN_COLUMN || currentColumn === CHECKBOX_COLUMN) {
+        updateCheckboxBasedOnDropdown(sheet, currentRow);
+      }
+      if (currentColumn >= START_COLUMN_PASTE_CHECK) {
+        updateDropdownBasedOnValues(sheet, currentRow);
+      }
 
-        // Check if the edited cell is in column >= START_COLUMN_PASTE_CHECK
-        if (currentColumn >= START_COLUMN_PASTE_CHECK) {
-          updateDropdownBasedOnValues(sheet, currentRow);
-        }
-
-        // Track rows where status or hours changed
-        if (currentColumn === STATUS_COLUMN || currentColumn === HOURS_COLUMN) {
-          rowsToUpdate.add(currentRow);
-        }
+      // Track rows where status or hours changed
+      if (currentColumn === STATUS_COLUMN || currentColumn === HOURS_COLUMN) {
+        rowsToUpdate.add(currentRow);
       }
     }
-
-    rowsToUpdate.forEach(function (r) {
-      updateProjectTotal(sheet, r);
-    });
   }
+
+  rowsToUpdate.forEach((r) => updateProjectTotal(sheet, r));
 }
 
 function updateCheckboxBasedOnDropdown(sheet, row) {
@@ -600,6 +592,21 @@ function updateProjectTotal(sheet, row) {
   cache.remove(sheet.getSheetId() + ':' + headerRow);
   var total = computeProjectSum(sheet, headerRow);
   sheet.getRange(headerRow, HOURS_COLUMN).setValue(total);
+}
+
+// Recompute totals for all project headers. Useful after removing formulas
+// or when initializing the sheet.
+function recomputeAllTotals() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(PROJECTS_SHEET);
+  if (!sheet) return;
+
+  const last = sheet.getLastRow();
+  for (let r = 1; r <= last; r++) {
+    if ((sheet.getRange(r, HEADER_COLOR_COLUMN).getBackground() || '').toLowerCase() === HEADER_COLOR) {
+      updateProjectTotal(sheet, r);
+    }
+  }
 }
 
 /**
