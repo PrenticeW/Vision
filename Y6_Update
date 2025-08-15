@@ -78,6 +78,8 @@ function onOpen() {
         .addItem('Color Selected G vs Previous Week', 'colorSelectedTotalsWoW')
         .addItem('Clear Font Color (Selected G)', 'clearSelectedFontColor')
     )
+    .addSeparator()
+    .addItem('Compare Weeks', 'compareWeeks')
     .addToUi();
 }
 
@@ -649,19 +651,21 @@ function colorSelectedTotalsWoW() {
     return;
   }
 
-  const sel = sheet.getActiveRange();
-  if (!sel) { ui.alert('Select one or more cells in column G.'); return; }
+  const selection = SpreadsheetApp.getActive().getSelection();
+  const rangeList = selection.getActiveRangeList();
+  if (!rangeList) { ui.alert('Select one or more cells in column G.'); return; }
 
-  // Gather only column-G rows from the selection
+  // Gather only column-G rows from all selected ranges
   const rows = new Set();
-  const r0 = sel.getRow(), c0 = sel.getColumn();
-  const nr = sel.getNumRows(), nc = sel.getNumColumns();
-  for (let dr = 0; dr < nr; dr++) {
-    for (let dc = 0; dc < nc; dc++) {
-      const col = c0 + dc;
-      if (col === 7) rows.add(r0 + dr); // only G
+  rangeList.getRanges().forEach((rng) => {
+    const r0 = rng.getRow(), c0 = rng.getColumn();
+    const nr = rng.getNumRows(), nc = rng.getNumColumns();
+    for (let dr = 0; dr < nr; dr++) {
+      for (let dc = 0; dc < nc; dc++) {
+        if (c0 + dc === 7) rows.add(r0 + dr); // only G
+      }
     }
-  }
+  });
   if (rows.size === 0) { ui.alert('Please select cells in column G.'); return; }
 
   let colored = 0, skipped = 0;
@@ -693,17 +697,76 @@ function colorSelectedTotalsWoW() {
   ui.alert(`Colored ${colored} cell(s); skipped ${skipped}.`);
 }
 
+/** MENU ACTION: Compare selected G cells with previous week's G values */
+function compareWeeks() {
+  const ui = SpreadsheetApp.getUi();
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  if (sheet.getName() !== PROJECTS_SHEET) {
+    ui.alert(`Run this on the "${PROJECTS_SHEET}" sheet.`);
+    return;
+  }
+
+  const selection = SpreadsheetApp.getActive().getSelection();
+  const rangeList = selection.getActiveRangeList();
+  if (!rangeList) { ui.alert('Select one or more cells in column G.'); return; }
+
+  // Gather only column-G rows from all selected ranges
+  const rows = new Set();
+  rangeList.getRanges().forEach((rng) => {
+    const r0 = rng.getRow(), c0 = rng.getColumn();
+    const nr = rng.getNumRows(), nc = rng.getNumColumns();
+    for (let dr = 0; dr < nr; dr++) {
+      for (let dc = 0; dc < nc; dc++) {
+        if (c0 + dc === 7) rows.add(r0 + dr); // only G
+      }
+    }
+  });
+  if (rows.size === 0) { ui.alert('Please select cells in column G.'); return; }
+
+  const anchor = WOW_getArchiveAnchorRow_(sheet);
+  let colored = 0, skipped = 0;
+  rows.forEach((row) => {
+    if (anchor && row <= anchor) { skipped++; return; }
+
+    // Find week boundaries
+    const thisStart = WOW_findWeekStartAtOrAbove_(sheet, row);
+    if (!thisStart) { skipped++; return; }
+    const prevStart = WOW_findPreviousWeekStart_(sheet, thisStart);
+    if (!prevStart) { skipped++; return; }
+    const prevEnd = WOW_findWeekEnd_(sheet, prevStart);
+
+    // Match by project name
+    const name = String(sheet.getRange(row, 1).getDisplayValue() || '').trim();
+    if (!name) { skipped++; return; }
+    const prevRow = WOW_findProjectRowInWeekByName_(sheet, prevStart, prevEnd, name);
+    if (!prevRow) { skipped++; return; }
+
+    // Compare G values
+    const curr = Number(sheet.getRange(row, 7).getValue());
+    const prev = Number(sheet.getRange(prevRow, 7).getValue());
+    if (isNaN(curr) || isNaN(prev)) { skipped++; return; }
+
+    sheet.getRange(row, 7).setFontColor(curr < prev ? WOW_RED : WOW_GREEN);
+    colored++;
+  });
+
+  ui.alert(`Compared ${colored} cell(s); skipped ${skipped}.`);
+}
+
 /** MENU ACTION: Clear font color on selected G cells */
 function clearSelectedFontColor() {
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
-  const sel = sheet.getActiveRange();
-  if (!sel) return;
+  const ss = SpreadsheetApp.getActive();
+  const sheet = ss.getActiveSheet();
+  const rangeList = ss.getSelection().getActiveRangeList();
+  if (!rangeList) return;
 
-  const r0 = sel.getRow(), c0 = sel.getColumn();
-  const nr = sel.getNumRows(), nc = sel.getNumColumns();
-  for (let dr = 0; dr < nr; dr++) {
-    for (let dc = 0; dc < nc; dc++) {
-      if (c0 + dc === 7) sheet.getRange(r0 + dr, 7).setFontColor(null);
+  rangeList.getRanges().forEach((rng) => {
+    const r0 = rng.getRow(), c0 = rng.getColumn();
+    const nr = rng.getNumRows(), nc = rng.getNumColumns();
+    for (let dr = 0; dr < nr; dr++) {
+      for (let dc = 0; dc < nc; dc++) {
+        if (c0 + dc === 7) sheet.getRange(r0 + dr, 7).setFontColor(null);
+      }
     }
-  }
+  });
 }
