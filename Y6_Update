@@ -615,11 +615,13 @@ function computeProjectSum(sheet, headerRow, useCache) {
 function updateProjectTotal(sheet, row) {
   var headerRow = findProjectHeaderRow(sheet, row);
   if (!headerRow) return;
-  var cache = CacheService.getUserCache();
-  cache.remove(sheet.getSheetId() + ':' + headerRow);
-  var total = computeProjectSum(sheet, headerRow);
-  sheet.getRange(headerRow, HOURS_COLUMN).setValue(total);
+
+  // Force the header’s ProjectHoursAt cell (column G = 7) to recompute.
+  var headerCell = sheet.getRange(headerRow, 7);
+  var f = headerCell.getFormula();
+  if (f) headerCell.setFormula(f); // re-sets the same formula to trigger recalc
 }
+
 
 /**
  * Sum hours under a colored project header until the next header of the same color.
