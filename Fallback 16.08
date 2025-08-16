@@ -1,0 +1,688 @@
+/* @OnlyCurrentDoc */
+
+// Define constants for specific rows and columns
+const HEADER_END_ROW = 9;
+const TEMPLATE_ROW = 1;
+const START_COPY_ROW = 9;
+const DROPDOWN_COLUMN = 4;
+const CHECKBOX_COLUMN = 1;
+const COLUMN_5 = 5;
+const RECURRING_COLUMN = 6; // Column F for recurring checkbox
+const PROJECTS_SHEET = 'Year 5: Projects';
+const STAGING_SHEET = 'Year 5: Staging';
+const DROPDOWN_TARGET_COLUMN = 2; // Added for column 2 reference
+const DROPDOWN_SOURCE_START_ROW = 265; // Added for row 289 reference
+const DROPDOWN_SOURCE_COLUMN_START = 1; // Added for column 1 reference in dropdown
+const DROPDOWN_SOURCE_COLUMN_END = 2; // Added for column 2 reference in dropdown
+const START_COLUMN_PASTE_CHECK = 9; // Added for column 9 reference
+const TEMPLATE_ROWS = [2, 3, 4]; // Added for template rows in insertNewProject function
+const NUM_CELLS_TO_COLOR = 7; // Added for number of cells to color in addArchiveHeader function
+const NUM_COLUMNS_HIDE = 7; // Added for number of columns to hide/unhide in hideSelectedWeek and unhidePreviousWeek functions
+const MAX_ROWS_TO_PASTE = 4; // Added so onEdit doesnt run when pasting into Archive
+const COLUMN_OFFSET = 8; // Used in "update based on column 5"
+const STATUS_COLUMN = DROPDOWN_COLUMN; // Column D for task status
+const HOURS_COLUMN = 8; // Column H for hours entry
+const PROJECT_HOURS_AT_COLUMN = 9; // Column I for ProjectHoursAt timestamp
+const HEADER_COLOR_COLUMN = 1; // Column A used to identify project headers
+const HEADER_COLOR = '#d5a6bd'; // Background color for project headers
+const CACHE_EXPIRATION = 3600; // Cache lifetime in seconds
+
+function onOpen() {
+  const ui = SpreadsheetApp.getUi(); // Get the user interface for the spreadsheet
+
+  // Create custom menu in Google Sheets with submenus
+  ui.createMenu('Vision')
+    .addSubMenu(
+      ui.createMenu('➕ Insert')
+        .addItem('Insert Tasks', 'insertTasks')
+        .addSeparator()
+        .addItem('Collect Times', 'captureSelectedRange')
+        .addItem('Insert Time Total', 'addTotalFunction')
+        .addSeparator()
+        .addItem('Insert Light Header', 'addLightArchiveHeader')
+        .addItem('Insert Dark Header', 'addDarkArchiveHeader')
+        .addSeparator()
+        .addItem('Insert New Project', 'insertNewProject')
+    )
+    .addSeparator()
+    .addSubMenu(
+      ui.createMenu('✱ Archive')
+        .addItem('Remove Tasks From Archive', 'deleteRows')
+        .addItem('Remove Tasks from Planner', 'deleteRowsDoneOrAbandoned')
+    )
+    .addSeparator()
+    .addSubMenu(
+      ui.createMenu('➖ Hide')
+        .addItem('Hide Week', 'hideSelectedWeek')
+        .addItem('Unhide Week', 'unhidePreviousWeek')
+        .addSeparator()
+        .addItem('Group Tasks', 'groupSelectedRows')
+        .addItem('Ungroup Tasks', 'ungroupSelectedRows')
+    )
+    .addToUi();
+}
+
+// ------------------------------------
+// Formatting
+// ------------------------------------
+
+function dropdown(e) {
+  let range = e.range;
+  let col = range.getColumn();
+  let row = range.getRow();
+  let val = range.getValue();
+  let source = e.source.getActiveSheet();
+
+  if (source.getName() == PROJECTS_SHEET && val != '' && col == DROPDOWN_TARGET_COLUMN) {
+    let ss = SpreadsheetApp.getActiveSpreadsheet();
+    let sheet = ss.getSheetByName(PROJECTS_SHEET);
+    let dropdownSheet = ss.getSheetByName(STAGING_SHEET);
+    let data = dropdownSheet
+      .getRange(
+        DROPDOWN_SOURCE_START_ROW,
+        DROPDOWN_SOURCE_COLUMN_START,
+        dropdownSheet.getLastRow() - 1,
+        DROPDOWN_SOURCE_COLUMN_END
+      )
+      .getValues();
+
+    let dropdowns = [];
+
+    for (let i = 0; i < data.length; i++) {
+      let thisrow = data[i];
+      if (thisrow[0] == val) {
+        dropdowns.push(thisrow[1]);
+      }
+    }
+
+    let rule = SpreadsheetApp.newDataValidation()
+      .requireValueInList(dropdowns)
+      .setAllowInvalid(false)
+      .build();
+
+    sheet.getRange(row, col + 1).setDataValidation(rule);
+  }
+}
+
+function onPaste(event) {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  var sheetName = sheet.getName();
+
+  // Constants
+  const TEMPLATE_ROW = 1; // Row used as the template for formatting
+  const HEADER_END_ROW = 9; // End of the header rows
+  const START_COLUMN_PASTE_CHECK = 9; // Minimum column to trigger formatting
+
+  // List of sheet names to which this function should apply
+  var allowedSheets = [PROJECTS_SHEET]; // Add your sheet names here
+
+  // Check if the active sheet is in the allowed sheets list
+  if (allowedSheets.indexOf(sheetName) === -1) {
+    return; // Exit the function if the sheet is not in the allowed list
+  }
+
+  var startRow = event.range.getRow();
+  var startColumn = event.range.getColumn();
+  var numRows = event.range.getNumRows();
+  var numColumns = event.range.getNumColumns();
+
+  // Exit if the paste action happens in rows 1-9 or starts before column 9
+  if (startRow <= HEADER_END_ROW || startColumn < START_COLUMN_PASTE_CHECK) {
+    return;
+  }
+
+  // Loop through each cell in the pasted range
+  for (var rowOffset = 0; rowOffset < numRows; rowOffset++) {
+    for (var colOffset = 0; colOffset < numColumns; colOffset++) {
+      var currentRow = startRow + rowOffset;
+      var currentColumn = startColumn + colOffset;
+      var editRange = sheet.getRange(currentRow, currentColumn, 1, 1);
+
+      // Exit if the current row is greater than HEADER_END_ROW and the cell contains a checkbox
+      if (currentRow > HEADER_END_ROW) {
+        var cellValidation = editRange.getDataValidation();
+        if (cellValidation && cellValidation.getCriteriaType() === SpreadsheetApp.DataValidationCriteria.CHECKBOX) {
+          continue; // Skip formatting if the cell contains a checkbox
+        }
+
+        // Copy format from TEMPLATE_ROW in the same column
+        var templateCell = sheet.getRange(TEMPLATE_ROW, currentColumn, 1, 1);
+        templateCell.copyTo(editRange, { formatOnly: true });
+      }
+    }
+  }
+}
+
+function onEdit(e) {
+  var sheet = e.source.getActiveSheet();
+  var range = e.range;
+  var sheetName = sheet.getName();
+
+  if (sheetName == PROJECTS_SHEET) {
+    var startRow = range.getRow();
+    var numRows = range.getNumRows();
+    var startColumn = range.getColumn();
+    var numColumns = range.getNumColumns();
+    var rowsToUpdate = new Set();
+    var timestampRows = new Set();
+
+    // Exit if the action is in the header (rows 1-9) or if more than 4 rows are being edited
+    if (startRow <= HEADER_END_ROW || numRows > MAX_ROWS_TO_PASTE) {
+      return;
+    }
+
+    // Run column 5 logic only when a single cell in column 5 is edited
+    if (numRows === 1 && numColumns === 1 && startColumn === COLUMN_5) {
+      updateDropdownBasedOnColumn5(sheet, startRow);
+      return;
+    }
+
+    // Iterate over each edited cell
+    for (var i = 0; i < numRows; i++) {
+      var currentRow = startRow + i;
+      for (var j = 0; j < numColumns; j++) {
+        var currentColumn = startColumn + j;
+
+        // Check if the edited cell is in column 4 or column 1
+        if (currentColumn === DROPDOWN_COLUMN || currentColumn === CHECKBOX_COLUMN) {
+          updateCheckboxBasedOnDropdown(sheet, currentRow);
+        }
+
+        // Check if the edited cell is in column >= START_COLUMN_PASTE_CHECK
+        if (currentColumn >= START_COLUMN_PASTE_CHECK) {
+          updateDropdownBasedOnValues(sheet, currentRow);
+        }
+
+        // Track rows where status or hours changed
+        if (currentColumn === STATUS_COLUMN || currentColumn === HOURS_COLUMN) {
+          rowsToUpdate.add(currentRow);
+        }
+
+        // Track rows requiring ProjectHoursAt update
+        if (currentColumn === STATUS_COLUMN || currentColumn === 7 || currentColumn === HOURS_COLUMN) {
+          timestampRows.add(currentRow);
+        }
+      }
+    }
+
+    rowsToUpdate.forEach(function (r) {
+      updateProjectTotal(sheet, r);
+    });
+
+    timestampRows.forEach(function (r) {
+      sheet.getRange(r, PROJECT_HOURS_AT_COLUMN).setValue(new Date());
+    });
+  }
+}
+
+function onChange(e) {
+  if (e.changeType !== 'OTHER') return;
+  var sheet = SpreadsheetApp.getActive().getSheetByName(PROJECTS_SHEET);
+  if (!sheet) return;
+  var row = sheet.getActiveCell().getRow();
+  sheet.getRange(row, PROJECT_HOURS_AT_COLUMN).setValue(new Date());
+}
+
+function updateCheckboxBasedOnDropdown(sheet, row) {
+  // Get the dropdown cell in column 4
+  var dropdownCell = sheet.getRange(row, DROPDOWN_COLUMN);
+
+  // Check if the cell has a dropdown (data validation)
+  var validation = dropdownCell.getDataValidation();
+  if (validation == null) {
+    return; // Exit if there is no dropdown in the cell
+  }
+
+  // Get the value of the dropdown in column 4
+  var dropdownValue = sheet.getRange(row, DROPDOWN_COLUMN).getValue();
+
+  // Get the checkbox in column 1
+  var checkboxCell = sheet.getRange(row, CHECKBOX_COLUMN);
+
+  // If the dropdown is not "Done", uncheck the checkbox
+  if (dropdownValue !== "Done") {
+    checkboxCell.setValue(false);
+  }
+}
+
+function updateDropdownBasedOnValues(sheet, row) {
+  // Get the dropdown cell in column 4
+  var dropdownCell = sheet.getRange(row, DROPDOWN_COLUMN);
+
+  // Check if the cell has a dropdown (data validation)
+  var validation = dropdownCell.getDataValidation();
+  if (validation == null) {
+    return; // Exit if there is no dropdown in the cell
+  }
+
+  // Get the range of the row specified beyond column 8
+  var rowRange = sheet.getRange(row, START_COLUMN_PASTE_CHECK, 1, sheet.getLastColumn() - START_COLUMN_PASTE_CHECK + 1); // Columns beyond column 8
+
+  // Get the values in the specified row beyond column 8
+  var values = rowRange.getValues()[0];
+
+  // Check if there is any value greater than 0 in the specified range
+  var hasValueGreaterThanZero = values.some(function (value) {
+    return value > 0;
+  });
+
+  // Logic based on the dropdown value
+  if (dropdownCell.getValue() === "Done") {
+    if (!hasValueGreaterThanZero) {
+      dropdownCell.setValue('Not Scheduled');
+      updateCheckboxBasedOnDropdown(sheet, row);
+    }
+  } else {
+    if (hasValueGreaterThanZero) {
+      dropdownCell.setValue('Scheduled');
+    } else {
+      dropdownCell.setValue('Not Scheduled');
+      updateCheckboxBasedOnDropdown(sheet, row);
+    }
+  }
+}
+
+function updateDropdownBasedOnColumn5(sheet, row) {
+  // List of statuses to exit the function
+  var excludedStatuses = ["Abandoned", "Blocked", "On Hold", "Skipped", "In Progress", "Done"];
+
+  // Get the value of the cell in column 5
+  var column5Value = sheet.getRange(row, 5).getValue()?.toString().trim(); // Ensure we are explicitly checking column 5
+
+  // Check if the status in column 5 matches any of the excluded statuses
+  if (excludedStatuses.includes(column5Value)) {
+    return; // Exit the function if the status is in the excluded list
+  }
+
+  // Get the range of cells beyond COLUMN_OFFSET in the same row
+  var beyondOffsetRange = sheet.getRange(row, COLUMN_OFFSET + 1, 1, sheet.getLastColumn() - COLUMN_OFFSET);
+  var beyondOffsetValues = beyondOffsetRange.getValues()[0];
+
+  // Check for any value greater than 0 using a loop for early exit
+  for (var i = 0; i < beyondOffsetValues.length; i++) {
+    if (beyondOffsetValues[i] > 0) {
+      return; // Exit the function immediately if a value > 0 is found
+    }
+  }
+
+  // Get the dropdown cell in column 4
+  var dropdownCell = sheet.getRange(row, DROPDOWN_COLUMN);
+
+  // Check if the cell has a dropdown (data validation)
+  var validation = dropdownCell.getDataValidation();
+  if (validation == null) {
+    return; // Exit if there is no dropdown in the cell
+  }
+
+  // Update the dropdown value based on column 5
+  if (column5Value === "") {
+    dropdownCell.setValue('-'); // Set to "-" if column 5 is empty
+  } else {
+    dropdownCell.setValue('Not Scheduled');
+  }
+}
+
+// ------------------------------------
+// Insert
+// ------------------------------------
+
+function insertTasks() {
+  const ui = SpreadsheetApp.getUi();
+  const response = ui.prompt('Insert Tasks', 'Enter number of tasks to insert:', ui.ButtonSet.OK_CANCEL);
+  if (response.getSelectedButton() !== ui.Button.OK) {
+    return;
+  }
+
+  const num = parseInt(response.getResponseText(), 10);
+  if (isNaN(num) || num <= 0) {
+    ui.alert('Please enter a valid positive number.');
+    return;
+  }
+
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  const range = sheet.getActiveRange();
+  const row = range.getRow();
+  const templateRange = sheet.getRange(TEMPLATE_ROW, 1, 1, sheet.getLastColumn());
+
+  sheet.insertRowsAfter(row, num);
+  const newRowsRange = sheet.getRange(row + 1, 1, num, sheet.getLastColumn());
+  templateRange.copyTo(newRowsRange, { contentsOnly: false });
+}
+
+function insertNewProject() {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  var range = sheet.getActiveRange();
+  var row = range.getRow();
+
+  // Insert three new rows below the selected row
+  sheet.insertRowsAfter(row, 3);
+
+  // Copy each template row to the newly inserted rows
+  for (var i = 0; i < TEMPLATE_ROWS.length; i++) {
+    var templateRow = TEMPLATE_ROWS[i];
+
+    // Get the range of the template row
+    var templateRange = sheet.getRange(templateRow, 1, 1, sheet.getLastColumn());
+
+    // Get the range of the new row
+    var newRowRange = sheet.getRange(row + 1 + i, 1, 1, sheet.getLastColumn());
+
+    // Copy values and formulas from the template row to the new row
+    templateRange.copyTo(newRowRange, { contentsOnly: false });
+  }
+}
+
+function getStoredRange() {
+  return PropertiesService.getScriptProperties().getProperty('storedRange');
+}
+
+function setStoredRange(range) {
+  PropertiesService.getScriptProperties().setProperty('storedRange', range);
+}
+
+function captureSelectedRange() {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  var range = sheet.getActiveRange();
+
+  if (range) {
+    var rangeA1Notation = range.getA1Notation();
+    setStoredRange(rangeA1Notation); // Store using Properties Service
+
+    // Log the captured range
+    Logger.log("Selected Range: " + rangeA1Notation);
+
+    // Display a message to the user with the captured range
+    SpreadsheetApp.getUi().alert("Captured Range: " + rangeA1Notation);
+  } else {
+    SpreadsheetApp.getUi().alert('No range selected. Please select a range of cells to capture.');
+  }
+}
+
+function addTotalFunction() {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  var range = sheet.getActiveRange();
+
+  if (range.getNumRows() == 1 && range.getNumColumns() == 1) {
+    var storedRange = getStoredRange(); // Retrieve using Properties Service
+    if (storedRange) {
+      // Insert the enhanced formula into the selected cell
+      range.setFormula('=IFERROR(ROUND(SUM(' + storedRange + '), 2), 0)');
+
+      // Set the font weight to bold
+      range.setFontWeight('bold');
+    } else {
+      SpreadsheetApp.getUi().alert('No range captured. Please capture a range first.');
+    }
+  } else {
+    SpreadsheetApp.getUi().alert('Please select a single cell.');
+  }
+}
+
+function addArchiveHeader(color) {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  const activeRange = sheet.getActiveRange();
+  const selectedRow = activeRange.getRow(); // Get the row of the selected range
+
+  // Get the range for the first 7 cells in the selected row
+  const newHeaderRange = sheet.getRange(selectedRow, 1, 1, NUM_CELLS_TO_COLOR);
+
+  // Set the background color for the first 7 cells in the selected row
+  newHeaderRange.setBackgrounds([[color, color, color, color, color, color, color]]);
+}
+
+function addDarkArchiveHeader() {
+  addArchiveHeader('#dce8d6');
+}
+
+function addLightArchiveHeader() {
+  addArchiveHeader('#f1f7f1');
+}
+
+// ------------------------------------
+// Archive
+// ------------------------------------
+
+function deleteRows() {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  var range = sheet.getActiveRange(); // Get the selected range
+  var data = range.getValues(); // Get the values of the selected range
+  var rowsToDelete = []; // Array to keep track of rows to delete
+
+  // Loop through the selected rows
+  for (var i = 0; i < data.length; i++) {
+    var row = range.getRow() + i; // Get the actual row number (1-indexed)
+    var dropdownValue = sheet.getRange(row, DROPDOWN_COLUMN).getValue(); // Get value from the dropdown in DROPDOWN_COLUMN
+
+    // If the dropdown value is "Skipped" or "Abandoned", update column 7 to "-"
+    if (dropdownValue === "Skipped" || dropdownValue === "Abandoned") {
+      sheet.getRange(row, 7).setValue("-"); // Set column 7 to "-"
+    }
+
+    // Check if the value in DROPDOWN_COLUMN is one of the specified values to delete
+    if (
+      dropdownValue === "Scheduled" ||
+      dropdownValue === "Not Scheduled" ||
+      dropdownValue === "Blocked" ||
+      dropdownValue === "On Hold" ||
+      dropdownValue === "Special"
+    ) {
+      rowsToDelete.push(row); // Add the row number to the delete list
+    }
+  }
+
+  // Delete rows in reverse order to prevent row shifting
+  for (var j = rowsToDelete.length - 1; j >= 0; j--) {
+    sheet.deleteRow(rowsToDelete[j]);
+  }
+
+  SpreadsheetApp.getUi().alert('Rows with "Scheduled", "Not Scheduled", "Blocked", or "On Hold" have been deleted.');
+}
+
+function deleteRowsDoneOrAbandoned() {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  var range = sheet.getActiveRange(); // Get the selected range
+  var data = range.getValues(); // Get the values of the selected range
+  var rowsToDelete = []; // Array to keep track of rows to delete
+
+  // Loop through the selected rows
+  for (var i = 0; i < data.length; i++) {
+    var row = range.getRow() + i; // Get the actual row number (1-indexed)
+    var dropdownValue = sheet.getRange(row, DROPDOWN_COLUMN).getValue(); // Column D is index 4 (4th column)
+    var isRecurring = sheet.getRange(row, RECURRING_COLUMN).getValue();
+
+    // Check if the value in column D is "Done" or "Abandoned"
+    if (dropdownValue === "Done" || dropdownValue === "Abandoned") {
+      if (isRecurring === true) {
+        var clearStartColumn = START_COLUMN_PASTE_CHECK - 1; // Column H
+        var numColumnsToClear = sheet.getLastColumn() - clearStartColumn + 1;
+        sheet.getRange(row, clearStartColumn, 1, numColumnsToClear).clearContent();
+        sheet.getRange(row, DROPDOWN_COLUMN).setValue('Not Scheduled');
+        sheet.getRange(row, CHECKBOX_COLUMN).setValue(false);
+      } else {
+        rowsToDelete.push(row); // Add the row number to the delete list
+      }
+    }
+  }
+
+  // Delete rows in reverse order to prevent row shifting
+  for (var j = rowsToDelete.length - 1; j >= 0; j--) {
+    sheet.deleteRow(rowsToDelete[j]);
+  }
+
+  SpreadsheetApp.getUi().alert('Rows have been deleted or cleared.');
+}
+
+// ------------------------------------
+// Hide
+// ------------------------------------
+
+function hideSelectedWeek() {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  var range = sheet.getActiveRange(); // Get the selected range
+  var startColumn = range.getColumn();
+
+  // Hide the selected column and the following 6 columns (7 columns total)
+  sheet.hideColumns(startColumn, NUM_COLUMNS_HIDE);
+}
+
+function unhidePreviousWeek() {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  var range = sheet.getActiveRange(); // Get the selected range
+  var startColumn = range.getColumn();
+
+  // Calculate the previous 7 columns
+  var startUnhideColumn = Math.max(1, startColumn - NUM_COLUMNS_HIDE); // Ensure we don't go below column 1
+
+  // Unhide the previous 7 columns
+  sheet.showColumns(startUnhideColumn, NUM_COLUMNS_HIDE);
+}
+
+// Group selected rows using the Google Sheets API
+function groupSelectedRows() {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  var range = sheet.getActiveRange();
+  var startRow = range.getRow();
+  var numRows = range.getNumRows();
+
+  // Use Sheets API to group rows
+  var requests = [{
+    addDimensionGroup: {
+      range: {
+        sheetId: sheet.getSheetId(),
+        dimension: "ROWS",
+        startIndex: startRow - 1,  // zero-based index
+        endIndex: startRow - 1 + numRows  // exclusive end index
+      }
+    }
+  }];
+
+  var request = { requests: requests };
+
+  // Batch update request to Sheets API
+  Sheets.Spreadsheets.batchUpdate(request, SpreadsheetApp.getActiveSpreadsheet().getId());
+}
+
+function findProjectHeaderRow(sheet, row) {
+  for (var r = row; r > 0; r--) {
+    if ((sheet.getRange(r, HEADER_COLOR_COLUMN).getBackground() || '').toLowerCase() === HEADER_COLOR) {
+      return r;
+    }
+  }
+  return null;
+}
+
+function computeProjectSum(sheet, headerRow, useCache) {
+  if (useCache === undefined) useCache = true;
+  var cache = CacheService.getUserCache();
+  var key = sheet.getSheetId() + ':' + headerRow;
+  if (useCache) {
+    var cached = cache.get(key);
+    if (cached !== null) return parseFloat(cached);
+  }
+
+  var last = sheet.getLastRow();
+  var bgs = sheet.getRange(headerRow + 1, HEADER_COLOR_COLUMN, last - headerRow, 1).getBackgrounds();
+  var endExclusive = last + 1;
+  for (var i = 0; i < bgs.length; i++) {
+    if ((bgs[i][0] || '').toLowerCase() === HEADER_COLOR) {
+      endExclusive = headerRow + 1 + i;
+      break;
+    }
+  }
+
+  var rowCount = endExclusive - headerRow - 1;
+  if (rowCount <= 0) {
+    cache.put(key, '0', CACHE_EXPIRATION);
+    return 0;
+  }
+
+  var statusVals = sheet.getRange(headerRow + 1, STATUS_COLUMN, rowCount, 1).getValues();
+  var hourVals = sheet.getRange(headerRow + 1, HOURS_COLUMN, rowCount, 1).getValues();
+  var allowed = { scheduled: true, done: true };
+  var sum = 0;
+  for (var j = 0; j < rowCount; j++) {
+    var st = String(statusVals[j][0] || '').toLowerCase().trim();
+    if (allowed[st]) {
+      var h = parseFloat(hourVals[j][0]);
+      if (!isNaN(h)) sum += h;
+    }
+  }
+  sum = Math.round(sum * 100) / 100;
+  if (useCache) cache.put(key, String(sum), CACHE_EXPIRATION);
+  return sum;
+}
+
+function updateProjectTotal(sheet, row) {
+  var headerRow = findProjectHeaderRow(sheet, row);
+  if (!headerRow) return;
+
+  // Force the header’s ProjectHoursAt cell (column G = 7) to recompute.
+  var headerCell = sheet.getRange(headerRow, 7);
+  var f = headerCell.getFormula();
+  if (f) headerCell.setFormula(f); // re-sets the same formula to trigger recalc
+}
+
+
+/**
+ * Sum hours under a colored project header until the next header of the same color.
+ * Counts only rows whose Status is "scheduled" or "done" (case-insensitive).
+ *
+ * Use in the HEADER's hours cell:
+ *   =ProjectHoursAt(ROW(), COLUMN())
+ * Optional parameters allow overriding the header color or column letter.
+ *
+ * @param {number} headerRow           e.g., ROW()
+ * @param {number} headerCol           e.g., COLUMN()
+ * @param {Range}  statusColRange      (unused) retained for backward compatibility
+ * @param {Range}  hoursColRange       (unused) retained for backward compatibility
+ * @param {string} [headerHex]         header color (default "#D5A6D5")
+ * @param {string} [headerColorCol]    column letter to scan for headers (default "A")
+ * @return {number} Rounded sum (2 dp). Returns 0 if not a header or on error.
+ * @customfunction
+ */
+function ProjectHoursAt(headerRow, headerCol, statusColRange, hoursColRange, headerHex, headerColorCol) {
+  try {
+    var sh = SpreadsheetApp.getActiveSheet();
+    var last = sh.getLastRow();
+    if (!headerRow || !headerCol || headerRow > last) return 0;
+
+    var targetHex = (headerHex || HEADER_COLOR).toLowerCase();
+    var letterToCol = function (L) {
+      var c = 0;
+      for (var i = 0; i < L.length; i++) c = c * 26 + (L.charCodeAt(i) - 64);
+      return c;
+    };
+    var colorCol = letterToCol((headerColorCol || 'A').toUpperCase());
+    if ((sh.getRange(headerRow, colorCol).getBackground() || '').toLowerCase() !== targetHex) return 0;
+
+    // Always recompute to reflect the latest edits; bypass cache
+    return computeProjectSum(sh, headerRow, false);
+  } catch (err) {
+    return 0;
+  }
+}
+
+// Function to ungroup selected rows
+function ungroupSelectedRows() {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  var range = sheet.getActiveRange();
+  var startRow = range.getRow();
+  var numRows = range.getNumRows();
+
+  // Use Sheets API to ungroup rows
+  var requests = [{
+    deleteDimensionGroup: {
+      range: {
+        sheetId: sheet.getSheetId(),
+        dimension: "ROWS",
+        startIndex: startRow - 1,  // zero-based index
+        endIndex: startRow - 1 + numRows  // exclusive end index
+      }
+    }
+  }];
+
+  var request = { requests: requests };
+
+  // Batch update request to Sheets API
+  Sheets.Spreadsheets.batchUpdate(request, SpreadsheetApp.getActiveSpreadsheet().getId());
+}
