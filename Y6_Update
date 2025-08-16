@@ -20,12 +20,6 @@ const NUM_CELLS_TO_COLOR = 7; // Added for number of cells to color in addArchiv
 const NUM_COLUMNS_HIDE = 7; // Added for number of columns to hide/unhide in hideSelectedWeek and unhidePreviousWeek functions
 const MAX_ROWS_TO_PASTE = 4; // Added so onEdit doesnt run when pasting into Archive
 const COLUMN_OFFSET = 8; // Used in "update based on column 5"
-const STATUS_COLUMN = DROPDOWN_COLUMN; // Column D for task status
-const HOURS_COLUMN = 8; // Column H for hours entry
-const PROJECT_HOURS_AT_COLUMN = 9; // Column I for ProjectHoursAt timestamp
-const HEADER_COLOR_COLUMN = 1; // Column A used to identify project headers
-const HEADER_COLOR = '#d5a6bd'; // Background color for project headers
-const CACHE_EXPIRATION = 3600; // Cache lifetime in seconds
 
 function onOpen() {
   const ui = SpreadsheetApp.getUi(); // Get the user interface for the spreadsheet
@@ -163,8 +157,6 @@ function onEdit(e) {
     var numRows = range.getNumRows();
     var startColumn = range.getColumn();
     var numColumns = range.getNumColumns();
-    var rowsToUpdate = new Set();
-    var timestampRows = new Set();
 
     // Exit if the action is in the header (rows 1-9) or if more than 4 rows are being edited
     if (startRow <= HEADER_END_ROW || numRows > MAX_ROWS_TO_PASTE) {
@@ -192,35 +184,9 @@ function onEdit(e) {
         if (currentColumn >= START_COLUMN_PASTE_CHECK) {
           updateDropdownBasedOnValues(sheet, currentRow);
         }
-
-        // Track rows where status or hours changed
-        if (currentColumn === STATUS_COLUMN || currentColumn === HOURS_COLUMN) {
-          rowsToUpdate.add(currentRow);
-        }
-
-        // Track rows requiring ProjectHoursAt update
-        if (currentColumn === STATUS_COLUMN || currentColumn === 7 || currentColumn === HOURS_COLUMN) {
-          timestampRows.add(currentRow);
-        }
       }
     }
-
-    rowsToUpdate.forEach(function (r) {
-      updateProjectTotal(sheet, r);
-    });
-
-    timestampRows.forEach(function (r) {
-      sheet.getRange(r, PROJECT_HOURS_AT_COLUMN).setValue(new Date());
-    });
   }
-}
-
-function onChange(e) {
-  if (e.changeType !== 'OTHER') return;
-  var sheet = SpreadsheetApp.getActive().getSheetByName(PROJECTS_SHEET);
-  if (!sheet) return;
-  var row = sheet.getActiveCell().getRow();
-  sheet.getRange(row, PROJECT_HOURS_AT_COLUMN).setValue(new Date());
 }
 
 function updateCheckboxBasedOnDropdown(sheet, row) {
@@ -562,107 +528,6 @@ function groupSelectedRows() {
   Sheets.Spreadsheets.batchUpdate(request, SpreadsheetApp.getActiveSpreadsheet().getId());
 }
 
-function findProjectHeaderRow(sheet, row) {
-  for (var r = row; r > 0; r--) {
-    if ((sheet.getRange(r, HEADER_COLOR_COLUMN).getBackground() || '').toLowerCase() === HEADER_COLOR) {
-      return r;
-    }
-  }
-  return null;
-}
-
-function computeProjectSum(sheet, headerRow, useCache) {
-  if (useCache === undefined) useCache = true;
-  var cache = CacheService.getUserCache();
-  var key = sheet.getSheetId() + ':' + headerRow;
-  if (useCache) {
-    var cached = cache.get(key);
-    if (cached !== null) return parseFloat(cached);
-  }
-
-  var last = sheet.getLastRow();
-  var bgs = sheet.getRange(headerRow + 1, HEADER_COLOR_COLUMN, last - headerRow, 1).getBackgrounds();
-  var endExclusive = last + 1;
-  for (var i = 0; i < bgs.length; i++) {
-    if ((bgs[i][0] || '').toLowerCase() === HEADER_COLOR) {
-      endExclusive = headerRow + 1 + i;
-      break;
-    }
-  }
-
-  var rowCount = endExclusive - headerRow - 1;
-  if (rowCount <= 0) {
-    cache.put(key, '0', CACHE_EXPIRATION);
-    return 0;
-  }
-
-  var statusVals = sheet.getRange(headerRow + 1, STATUS_COLUMN, rowCount, 1).getValues();
-  var hourVals = sheet.getRange(headerRow + 1, HOURS_COLUMN, rowCount, 1).getValues();
-  var allowed = { scheduled: true, done: true };
-  var sum = 0;
-  for (var j = 0; j < rowCount; j++) {
-    var st = String(statusVals[j][0] || '').toLowerCase().trim();
-    if (allowed[st]) {
-      var h = parseFloat(hourVals[j][0]);
-      if (!isNaN(h)) sum += h;
-    }
-  }
-  sum = Math.round(sum * 100) / 100;
-  if (useCache) cache.put(key, String(sum), CACHE_EXPIRATION);
-  return sum;
-}
-
-function updateProjectTotal(sheet, row) {
-  var headerRow = findProjectHeaderRow(sheet, row);
-  if (!headerRow) return;
-
-  // Force the header’s ProjectHoursAt cell (column G = 7) to recompute.
-  var headerCell = sheet.getRange(headerRow, 7);
-  var f = headerCell.getFormula();
-  if (f) headerCell.setFormula(f); // re-sets the same formula to trigger recalc
-}
-
-
-/**
- * Sum hours under a colored project header until the next header of the same color.
- * Counts only rows whose Status is "scheduled" or "done" (case-insensitive).
- *
- * Use in the HEADER's hours cell:
- *   =ProjectHoursAt(ROW(), COLUMN())
- * Optional parameters allow overriding the header color or column letter.
- *
- * @param {number} headerRow           e.g., ROW()
- * @param {number} headerCol           e.g., COLUMN()
- * @param {Range}  statusColRange      (unused) retained for backward compatibility
- * @param {Range}  hoursColRange       (unused) retained for backward compatibility
- * @param {string} [headerHex]         header color (default "#D5A6D5")
- * @param {string} [headerColorCol]    column letter to scan for headers (default "A")
- * @return {number} Rounded sum (2 dp). Returns 0 if not a header or on error.
- * @customfunction
- */
-function ProjectHoursAt(headerRow, headerCol, statusColRange, hoursColRange, headerHex, headerColorCol) {
-  try {
-    var sh = SpreadsheetApp.getActiveSheet();
-    var last = sh.getLastRow();
-    if (!headerRow || !headerCol || headerRow > last) return 0;
-
-    var targetHex = (headerHex || HEADER_COLOR).toLowerCase();
-    var letterToCol = function (L) {
-      var c = 0;
-      for (var i = 0; i < L.length; i++) c = c * 26 + (L.charCodeAt(i) - 64);
-      return c;
-    };
-    var colorCol = letterToCol((headerColorCol || 'A').toUpperCase());
-    if ((sh.getRange(headerRow, colorCol).getBackground() || '').toLowerCase() !== targetHex) return 0;
-
-    // Always recompute to reflect the latest edits; bypass cache
-    return computeProjectSum(sh, headerRow, false);
-  } catch (err) {
-    return 0;
-  }
-}
-
-// Function to ungroup selected rows
 function ungroupSelectedRows() {
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
   var range = sheet.getActiveRange();
