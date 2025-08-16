@@ -16,7 +16,7 @@ const DROPDOWN_SOURCE_COLUMN_START = 1; // Added for column 1 reference in dropd
 const DROPDOWN_SOURCE_COLUMN_END = 2; // Added for column 2 reference in dropdown
 const START_COLUMN_PASTE_CHECK = 9; // Added for column 9 reference
 const TEMPLATE_ROWS = [2, 3, 4]; // Added for template rows in insertNewProject function
-const NUM_CELLS_TO_COLOR = 7; // Added for number of cells to color in addArchiveHeader function
+const NUM_CELLS_TO_COLOR = 8; // Added for number of cells to color in addArchiveHeader function
 const NUM_COLUMNS_HIDE = 7; // Added for number of columns to hide/unhide in hideSelectedWeek and unhidePreviousWeek functions
 const MAX_ROWS_TO_PASTE = 4; // Added so onEdit doesnt run when pasting into Archive
 const COLUMN_OFFSET = 8; // Used in "update based on column 5"
@@ -393,7 +393,7 @@ function addArchiveHeader(color) {
   const newHeaderRange = sheet.getRange(selectedRow, 1, 1, NUM_CELLS_TO_COLOR);
 
   // Set the background color for the first 7 cells in the selected row
-  newHeaderRange.setBackgrounds([[color, color, color, color, color, color, color]]);
+  newHeaderRange.setBackgrounds([[color, color, color, color, color, color, color, color]]);
 }
 
 function addDarkArchiveHeader() {
