@@ -411,17 +411,21 @@ function addLightArchiveHeader() {
 function deleteRows() {
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
   var range = sheet.getActiveRange(); // Get the selected range
-  var data = range.getValues(); // Get the values of the selected range
-  var rowsToDelete = []; // Array to keep track of rows to delete
+  var startRow = range.getRow();
+  var numRows = range.getNumRows();
+  var dropdownValues = sheet
+    .getRange(startRow, DROPDOWN_COLUMN, numRows, 1)
+    .getValues();
+  var col7Values = sheet.getRange(startRow, 7, numRows, 1).getValues();
+  var rowsToDelete = [];
 
   // Loop through the selected rows
-  for (var i = 0; i < data.length; i++) {
-    var row = range.getRow() + i; // Get the actual row number (1-indexed)
-    var dropdownValue = sheet.getRange(row, DROPDOWN_COLUMN).getValue(); // Get value from the dropdown in DROPDOWN_COLUMN
+  for (var i = 0; i < numRows; i++) {
+    var dropdownValue = dropdownValues[i][0];
 
     // If the dropdown value is "Skipped" or "Abandoned", update column 7 to "-"
     if (dropdownValue === "Skipped" || dropdownValue === "Abandoned") {
-      sheet.getRange(row, 7).setValue("-"); // Set column 7 to "-"
+      col7Values[i][0] = "-"; // Set column 7 to "-"
     }
 
     // Check if the value in DROPDOWN_COLUMN is one of the specified values to delete
@@ -432,14 +436,15 @@ function deleteRows() {
       dropdownValue === "On Hold" ||
       dropdownValue === "Special"
     ) {
-      rowsToDelete.push(row); // Add the row number to the delete list
+      rowsToDelete.push(startRow + i); // Add the row number to the delete list
     }
   }
 
+  // Apply updates to column 7 in one call
+  sheet.getRange(startRow, 7, numRows, 1).setValues(col7Values);
+
   // Delete rows in reverse order to prevent row shifting
-  for (var j = rowsToDelete.length - 1; j >= 0; j--) {
-    sheet.deleteRow(rowsToDelete[j]);
-  }
+  deleteRowsDescending(sheet, rowsToDelete);
 
   SpreadsheetApp.getUi().alert('Rows with "Scheduled", "Not Scheduled", "Blocked", or "On Hold" have been deleted.');
 }
@@ -447,19 +452,26 @@ function deleteRows() {
 function deleteRowsDoneOrAbandoned() {
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
   var range = sheet.getActiveRange(); // Get the selected range
-  var data = range.getValues(); // Get the values of the selected range
+  var startRow = range.getRow();
+  var numRows = range.getNumRows();
+  var dropdownValues = sheet
+    .getRange(startRow, DROPDOWN_COLUMN, numRows, 1)
+    .getValues();
+  var recurringValues = sheet
+    .getRange(startRow, RECURRING_COLUMN, numRows, 1)
+    .getValues();
   var rowsToDelete = []; // Array to keep track of rows to delete
 
   // Loop through the selected rows
-  for (var i = 0; i < data.length; i++) {
-    var row = range.getRow() + i; // Get the actual row number (1-indexed)
-    var dropdownValue = sheet.getRange(row, DROPDOWN_COLUMN).getValue(); // Column D is index 4 (4th column)
-    var isRecurring = sheet.getRange(row, RECURRING_COLUMN).getValue();
+  for (var i = 0; i < numRows; i++) {
+    var row = startRow + i; // Get the actual row number (1-indexed)
+    var dropdownValue = dropdownValues[i][0];
+    var isRecurring = recurringValues[i][0];
 
     // Check if the value in column D is "Done" or "Abandoned"
     if (dropdownValue === "Done" || dropdownValue === "Abandoned") {
       if (isRecurring === true) {
-        var clearStartColumn = START_COLUMN_PASTE_CHECK - 1; // Column H
+        var clearStartColumn = START_COLUMN_PASTE_CHECK; // Start after column H
         var numColumnsToClear = sheet.getLastColumn() - clearStartColumn + 1;
         sheet.getRange(row, clearStartColumn, 1, numColumnsToClear).clearContent();
         sheet.getRange(row, DROPDOWN_COLUMN).setValue('Not Scheduled');
@@ -471,11 +483,26 @@ function deleteRowsDoneOrAbandoned() {
   }
 
   // Delete rows in reverse order to prevent row shifting
-  for (var j = rowsToDelete.length - 1; j >= 0; j--) {
-    sheet.deleteRow(rowsToDelete[j]);
-  }
+  deleteRowsDescending(sheet, rowsToDelete);
 
   SpreadsheetApp.getUi().alert('Rows have been deleted or cleared.');
+}
+
+// Helper to delete multiple rows efficiently
+function deleteRowsDescending(sheet, rows) {
+  rows.sort(function (a, b) {
+    return b - a;
+  });
+  for (var i = 0; i < rows.length; ) {
+    var start = rows[i];
+    var end = start;
+    while (i + 1 < rows.length && rows[i + 1] === end - 1) {
+      end = rows[i + 1];
+      i++;
+    }
+    sheet.deleteRows(end, start - end + 1);
+    i++;
+  }
 }
 
 // ------------------------------------
